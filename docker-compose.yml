@@ -1,0 +1,95 @@
+name: taller-bd
+
+services:
+  config01:
+    image: mongo:7.0
+    container_name: taller-bd-config01
+    command:
+      - mongod
+      - --configsvr
+      - --replSet
+      - config-rs
+      - --port
+      - "27017"
+      - --bind_ip_all
+    volumes:
+      - config01-data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--port", "27017", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+
+  shard01a:
+    image: mongo:7.0
+    container_name: taller-bd-shard01a
+    command:
+      - mongod
+      - --shardsvr
+      - --replSet
+      - shard01-rs
+      - --port
+      - "27017"
+      - --bind_ip_all
+    volumes:
+      - shard01a-data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--port", "27017", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+
+  shard02a:
+    image: mongo:7.0
+    container_name: taller-bd-shard02a
+    command:
+      - mongod
+      - --shardsvr
+      - --replSet
+      - shard02-rs
+      - --port
+      - "27017"
+      - --bind_ip_all
+    volumes:
+      - shard02a-data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--port", "27017", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+
+  mongos:
+    image: mongo:7.0
+    container_name: taller-bd-mongos
+    command:
+      - mongos
+      - --configdb
+      - config-rs/config01:27017
+      - --bind_ip_all
+    ports:
+      - "27017:27017"
+    restart: unless-stopped
+    depends_on:
+      config01:
+        condition: service_healthy
+      shard01a:
+        condition: service_healthy
+      shard02a:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "mongosh", "--port", "27017", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+volumes:
+  config01-data:
+  shard01a-data:
+  shard02a-data:
