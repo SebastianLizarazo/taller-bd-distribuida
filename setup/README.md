@@ -47,6 +47,10 @@ El script:
 iniciado y no rompe. Los `enableSharding` y `shardCollection` chequean
 `config.collections` antes de invocarse para no duplicar estado.
 
+> El setup inicial mete un **seed minimo** (4 usuarios, 4 eventos). Para
+> tener volumen realista (60 usuarios + 600 eventos) que demuestre el sharding
+> visualmente, corré aparte `.\setup\seed.ps1` (ver "Seed de datos" mas abajo).
+
 ## Qué queda armado
 
 Al final del setup, el cluster tiene:
@@ -57,9 +61,59 @@ Al final del setup, el cluster tiene:
 - **2 colecciones shardeadas** (sharing **horizontal** — filas repartidas entre shards):
   - `taller_perfiles.usuarios` shardeada por `{pais: 1}` (rango)
   - `taller_actividad.eventos`  shardeada por `{user_id: 1}` (rango)
-- **Seed data inicial**: 4 usuarios (uno por país: AR, MX, CO, ES) y 4 eventos
-  (uno por usuario). Después del split + move manual, los 2 shards tienen
-  chunks asignados con datos.
+- **Seed minimo** (4 usuarios, 4 eventos) para que `getShardDistribution()`
+  no muestre 0/0 apenas arrancamos. Después del split + move manual del
+  paso 04, los 2 shards tienen chunks asignados con datos.
+
+Para volumen realista que demuestre el sharding visualmente (30/30 entre
+shards, no 2/2 magro), correr aparte `.\setup\seed.ps1` — ver seccion
+siguiente.
+
+## Seed de datos (volumen realista)
+
+`setup-cluster.ps1` mete solo 4 usuarios + 4 eventos para arrancar rapido.
+Para el taller queremos volumen que muestre el sharding **visualmente**:
+60 usuarios (15 por pais) y ~600 eventos (10 por usuario).
+
+```powershell
+.\setup\seed.ps1
+```
+
+Que hace:
+
+1. Verifica que `taller-bd-mongos` esta corriendo (si no, aborta con un
+   mensaje claro apuntando a `setup-cluster.ps1`).
+2. Pingea `mongos` para confirmar que responde.
+3. Ejecuta `setup/05-seed.js` dentro del contenedor `mongos`. El script:
+   - Borra todas las docs de `taller_perfiles.usuarios` y `taller_actividad.eventos`.
+   - Verifica / redistribuye los chunks para que el split point encaje con
+     los nuevos datos (`{pais: "ES"}` y `{user_id: "usr-ES"}`).
+   - Inserta 60 usuarios con pools deterministicos de nombres, emails y
+     fechas (15 por pais: AR/CO/ES/MX).
+   - Inserta 600 eventos (10 por usuario, ObjectId generado, payloads
+     contextual al `tipo`: `{login, purchase, view_product, add_to_cart,
+     review, search, share, like}`).
+   - Imprime `getShardDistribution()` y conteos por pais al terminar.
+
+Que esperar al final:
+
+- `taller_perfiles.usuarios`: **30 docs en shard01-rs** (AR+CO) + **30 docs
+  en shard02-rs** (ES+MX). Distribucion 50/50 exacta cuando el split en
+  `{pais: "ES"}` esta bien configurado.
+- `taller_actividad.eventos`: **300 en shard01-rs** (user_ids `usr-AR-*` +
+  `usr-CO-*`) + **300 en shard02-rs** (user_ids `usr-ES-*` + `usr-MX-*`).
+- `aggregate([{$group:{_id:"$pais",total:{$sum:1}}}])`: 4 grupos, cada uno
+  con `total: 15`.
+
+El seed es **idempotente**: borra y regenera desde cero. Lo podes correr
+muchas veces seguidas, siempre da el mismo dataset (pools hardcoded + LCG
+sembrado en 42).
+
+> **Por que `seed.ps1` es aparte y no parte de `setup-cluster.ps1`**: el
+> setup inicial es para arrancar de cero (contenedores, replica sets,
+> shards, sharding). El seed masivo es data de demo que se regenera sin
+> tocar la infra. Mezclarlos obligaria a re-inicializar el cluster cada
+> vez que se quiere resetear los datos, que no es lo que queremos.
 
 ### Sharding key elegida
 
@@ -68,12 +122,16 @@ Rango (no hashed) para que las queries targeted sean predecibles y didácticas:
 | Colección | Rango dividido | Split point | Resultado |
 |-----------|----------------|-------------|-----------|
 | `usuarios` por `{pais: 1}`    | `[MinKey, "ES")` y `["ES", MaxKey)` | `{pais: "ES"}` | chunk1 = {AR, CO}, chunk2 = {ES, MX} |
-| `eventos`  por `{user_id: 1}` | `[MinKey, "seed-ES")` y `["seed-ES", MaxKey)` | `{user_id: "seed-ES"}` | chunk1 = {AR, CO}, chunk2 = {ES, MX} |
+| `eventos`  por `{user_id: 1}` | `[MinKey, "seed-ES")` y `["seed-ES", MaxKey)` despues de `setup-cluster.ps1`; o `[MinKey, "usr-ES")` y `["usr-ES", MaxKey)` despues de `seed.ps1` | `{user_id: "seed-ES"}` o `{user_id: "usr-ES"}` | chunk1 = {AR, CO}, chunk2 = {ES, MX} |
 
 MongoDB **no** garantiza que un valor particular vaya a un shard específico
 con cardinalidad baja (sin split manual, autosplit no dispara con 4 docs).
 El split + `moveChunk` del script 04 es lo que hace visible la distribución
 desde la primera corrida.
+
+Despues de correr `.\setup\seed.ps1` el split point de eventos pasa a
+`{user_id: "usr-ES"}` (los nuevos user_ids arrancan con `usr-` en lugar de
+`seed-`). El script lo redistribuye de forma idempotente.
 
 ## Verificación manual
 
@@ -110,13 +168,18 @@ docker compose down
 
 ## Archivos de este setup
 
-- `setup-cluster.ps1`: orquestador idempotente (13 pasos).
+- `setup-cluster.ps1`: orquestador idempotente (13 pasos). Inicializa el
+  cluster desde cero (contenedores, RS, shards, sharding, seed minimo).
+- `seed.ps1`: corre el seed MASIVO (paso 6 del taller). Pensado para correr
+  muchas veces sin re-inicializar el cluster. Ver seccion "Seed de datos".
 - `01-init-replicasets.js`: dispara `replSetInitiate` en los 3 nodos.
 - `02-add-shards.js`: agrega los 2 shards vía mongos.
 - `03-enable-sharding.js`: `enableSharding` + `shardCollection` para `taller_perfiles.usuarios`
   (por `{pais: 1}`) y `taller_actividad.eventos` (por `{user_id: 1}`).
 - `04-insert-distribution.js`: upsert de 4 usuarios + 4 eventos semilla y `split` +
   `moveChunk` manual para que ambos shards tengan datos visibles.
+- `05-seed.js`: seed masivo (60 usuarios + 600 eventos). Borrar + insertar
+  con pools deterministicos. Redistribuye chunks si hace falta.
 
 Los nombres de contenedor llevan el prefijo `taller-bd-` para no chocar con
 otros talleres que puedan estar corriendo en la misma máquina.
