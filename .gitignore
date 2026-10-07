@@ -1,0 +1,40 @@
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Build outputs
+frontend/dist/
+backend/dist/
+
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
+
+# Mongo local
+data/
+*.dump
+mongodump/
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Misc
+.cache/
+.parcel-cache/
