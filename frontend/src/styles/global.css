@@ -1,0 +1,130 @@
+:root {
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --panel-2: #334155;
+  --border: #475569;
+  --text: #e2e8f0;
+  --text-dim: #94a3b8;
+  --accent: #06b6d4;
+  --accent-2: #22d3ee;
+  --shard1: #f59e0b;  /* shard01-rs - amarillo */
+  --shard2: #3b82f6;  /* shard02-rs - azul */
+  --both: #a78bfa;    /* scatter-gather */
+  --ok: #10b981;
+  --err: #ef4444;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+button {
+  font: inherit;
+  background: var(--accent);
+  color: #001018;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+button:hover { background: var(--accent-2); }
+button:disabled { background: var(--panel-2); color: var(--text-dim); cursor: not-allowed; }
+
+input, select, textarea {
+  font: inherit;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  border-radius: 6px;
+  width: 100%;
+}
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+
+.layout { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 240px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  padding: 20px;
+}
+.sidebar h1 { font-size: 18px; margin: 0 0 4px; }
+.sidebar h1 small { display: block; font-size: 11px; color: var(--text-dim); font-weight: normal; margin-top: 4px; }
+.sidebar nav { margin-top: 24px; }
+.sidebar nav a {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 6px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.sidebar nav a:hover { background: var(--panel-2); text-decoration: none; color: var(--text); }
+.sidebar nav a.active { background: var(--accent); color: #001018; font-weight: 600; }
+
+.main { flex: 1; padding: 30px; max-width: 1200px; }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.card h2 { margin: 0 0 12px; font-size: 16px; }
+.card h2 small { font-weight: normal; color: var(--text-dim); margin-left: 8px; font-size: 12px; }
+
+.row { display: flex; gap: 12px; align-items: center; }
+.row + .row { margin-top: 10px; }
+.grow { flex: 1; }
+
+.shard-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'SF Mono', Menlo, monospace;
+}
+.shard-badge.shard1 { background: var(--shard1); color: #1a1208; }
+.shard-badge.shard2 { background: var(--shard2); color: #fff; }
+.shard-badge.both { background: var(--both); color: #fff; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+th { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+tr:hover { background: var(--panel-2); }
+
+.bar { height: 24px; background: var(--panel-2); border-radius: 4px; overflow: hidden; display: flex; }
+.bar > div { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #001018; }
+.bar > .shard1-frag { background: var(--shard1); }
+.bar > .shard2-frag { background: var(--shard2); }
+
+.legend { display: flex; gap: 12px; font-size: 12px; color: var(--text-dim); margin-top: 8px; }
+.legend .dot { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+
+pre.code {
+  background: #0b1220;
+  border: 1px solid var(--border);
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 12px;
+  font-family: 'SF Mono', Menlo, monospace;
+}
+
+.error { color: var(--err); padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: 6px; }
+.ok { color: var(--ok); }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 800px) { .grid-2 { grid-template-columns: 1fr; } }
