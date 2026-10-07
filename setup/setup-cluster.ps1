@@ -189,18 +189,68 @@ if ($LASTEXITCODE -ne 0) {
 }
 Good "Shards agregados al cluster"
 
-# 10. Banner primero, después sh.status() (mongosh tiene stdout buffered; el banner
-# escrito con Write-Host sale antes y se ve claro que el cluster ya está operativo).
+# 11. Habilitar sharding en las 2 DBs (sharing vertical) y shardear cada coleccion
+#     principal por una sharding key (sharing horizontal).
+Step "Habilitando sharding en taller_perfiles y taller_actividad (03-enable-sharding.js)..."
+$enableScript = Join-Path $PSScriptRoot "03-enable-sharding.js"
+if (-not (Test-Path -LiteralPath $enableScript)) {
+    Fail "No encuentro el script: $enableScript"
+    exit 1
+}
+
+Get-Content -LiteralPath $enableScript -Raw | docker exec -i taller-bd-mongos mongosh --port 27017 --quiet
+if ($LASTEXITCODE -ne 0) {
+    Fail "Fallo 03-enable-sharding.js (exit=$LASTEXITCODE)"
+    exit 1
+}
+Good "Sharding habilitado en ambas DBs (taller_perfiles + taller_actividad)"
+
+# 12. Insertar docs semilla y forzar split + move para que AMBOS shards tengan
+#     chunks asignados (sin esto, autosplit no dispara con 4 docs y un solo shard
+#     tendria todos los chunks).
+Step "Insertando seed data + forzar split/move entre shards (04-insert-distribution.js)..."
+$seedScript = Join-Path $PSScriptRoot "04-insert-distribution.js"
+if (-not (Test-Path -LiteralPath $seedScript)) {
+    Fail "No encuentro el script: $seedScript"
+    exit 1
+}
+
+Get-Content -LiteralPath $seedScript -Raw | docker exec -i taller-bd-mongos mongosh --port 27017 --quiet
+if ($LASTEXITCODE -ne 0) {
+    Fail "Fallo 04-insert-distribution.js (exit=$LASTEXITCODE)"
+    exit 1
+}
+Good "Distribucion inicial materializada en ambos shards"
+
+# 13. Banner final con info del sharding habilitado.
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Green
-Write-Host "  CLUSTER LISTO" -ForegroundColor Green
-Write-Host "  Conectate con:  mongosh --host localhost:27017" -ForegroundColor Green
-Write-Host "  Ver shards:     mongosh --host localhost:27017 --eval 'sh.status()'" -ForegroundColor Green
-Write-Host "  Apagar:         $ComposeExe $($ComposePrefix -join ' ') down" -ForegroundColor Green
+Write-Host "  CLUSTER LISTO CON SHARDING HABILITADO" -ForegroundColor Green
+Write-Host "" -ForegroundColor Green
+Write-Host "  Sharing vertical (DBs separadas):" -ForegroundColor Green
+Write-Host "    - taller_perfiles   (coleccion 'usuarios' shardeada por {pais: 1})" -ForegroundColor Green
+Write-Host "    - taller_actividad  (coleccion 'eventos'  shardeada por {user_id: 1})" -ForegroundColor Green
+Write-Host "" -ForegroundColor Green
+Write-Host "  Sharing horizontal: cada coleccion shardeada reparte filas entre" -ForegroundColor Green
+Write-Host "  shard01-rs y shard02-rs. Ver abajo la distribucion." -ForegroundColor Green
+Write-Host "" -ForegroundColor Green
+Write-Host "  Conectarte:               mongosh --host localhost:27017" -ForegroundColor Green
+Write-Host "  sh.status():              mongosh --host localhost:27017 --eval 'sh.status()'" -ForegroundColor Green
+Write-Host "  Distribucion por shard:" -ForegroundColor Green
+Write-Host "    mongosh --host localhost:27017 --eval 'db.getSiblingDB(\"taller_perfiles\").usuarios.getShardDistribution()'" -ForegroundColor Green
+Write-Host "  Apagar:                   $ComposeExe $($ComposePrefix -join ' ') down" -ForegroundColor Green
 Write-Host "================================================================" -ForegroundColor Green
 
-Step "Estado final (sh.status desde mongos):"
-docker exec taller-bd-mongos mongosh --port 27017 --quiet --eval "sh.status()"
+Step "Distribucion final por coleccion:"
+$distroCmd = @"
+const p = db.getSiblingDB('taller_perfiles');
+const a = db.getSiblingDB('taller_actividad');
+print('--- taller_perfiles.usuarios ---');
+p.usuarios.getShardDistribution();
+print('--- taller_actividad.eventos ---');
+a.eventos.getShardDistribution();
+"@
+docker exec -i taller-bd-mongos mongosh --port 27017 --quiet --eval $distroCmd
 if ($LASTEXITCODE -ne 0) {
-    Warn "sh.status() fallo, pero los shards pueden estar agregados. Revisa el output."
+    Warn "getShardDistribution() fallo. Revisa el estado del cluster."
 }
