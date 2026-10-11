@@ -3,11 +3,12 @@
 App funcional que demuestra **sharing horizontal** (filas repartidas entre shards por sharding key) y **sharing vertical** (datos base en una DB, datos extendidos en otra DB, cruzados por `user_id`) usando un **MongoDB sharded cluster** corriendo en Docker.
 
 ## Integrantes
-- Edwar Fonseca
-- Alejandro Huerfano
-- Sebastian Lizarazo
-- David Quijano
-- Jonathan Romero
+- Edwar Esteban Fonseca Jiménez 
+- David Sebastián Quijano Obando 
+- Sebastián David Lizarazo Duarte 
+- Jonathan David Romero Bayona 
+- Alejandro Huérfano Benítez
+
 
 ---
 
