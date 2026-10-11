@@ -2,7 +2,12 @@
 
 App funcional que demuestra **sharing horizontal** (filas repartidas entre shards por sharding key) y **sharing vertical** (datos base en una DB, datos extendidos en otra DB, cruzados por `user_id`) usando un **MongoDB sharded cluster** corriendo en Docker.
 
-Asignatura: *Tendencias modernas de bases de datos*.
+## Integrantes
+- Edwar Fonseca
+- Alejandro Huerfano
+- Sebastian Lizarazo
+- David Quijano
+- Jonathan Romero
 
 ---
 
@@ -23,7 +28,7 @@ node --version
 
 ---
 
-## Quick start (Windows + PowerShell)
+## Cómo probarlo (Windows + PowerShell)
 
 Desde la raíz del repo:
 
@@ -86,7 +91,7 @@ Express :3001 ─── driver nativo mongodb ───►  mongos :27017
 
 ---
 
-## Cómo el profesor valida el sharding
+## Validación del sharding
 
 ### 1. Sharing horizontal (filas)
 
@@ -228,8 +233,3 @@ docker compose down -v
 ```
 
 ---
-
-## Licencia / Notas
-
-Material para un taller universitario. MongoDB 7.0 + Docker + Node 24 + React 18.
-Sin auth, sin TLS — la idea es mostrar el sharding, no endurecer un sistema en producción.
