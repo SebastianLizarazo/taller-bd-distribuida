@@ -94,13 +94,16 @@ if ($LASTEXITCODE -ne 0) {
 }
 Good "Contenedores iniciados"
 
-# 4. Esperar healthchecks de los 4 contenedores
-Step "Esperando healthchecks (max $HealthWaitSeconds s)..."
-$services = @(
+# 4. Esperar healthchecks SOLO de los 3 nodos de datos (config-rs + shards).
+#    El mongos no se incluye aca porque su healthcheck depende de que el
+#    config-rs tenga primary, y el config-rs no tiene primary hasta que corramos
+#    01-init-replicasets.js mas abajo (deadlock). Lo esperamos en un paso aparte
+#    despues de iniciar los replica sets.
+Step "Esperando healthchecks de los 3 nodos de datos (max $HealthWaitSeconds s)..."
+$dataServices = @(
     @{ Name = "config01"; Container = "taller-bd-config01" },
     @{ Name = "shard01a"; Container = "taller-bd-shard01a" },
-    @{ Name = "shard02a"; Container = "taller-bd-shard02a" },
-    @{ Name = "mongos";   Container = "taller-bd-mongos"   }
+    @{ Name = "shard02a"; Container = "taller-bd-shard02a" }
 )
 
 $allHealthy = $false
@@ -108,7 +111,7 @@ $deadline = (Get-Date).AddSeconds($HealthWaitSeconds)
 while ((Get-Date) -lt $deadline) {
     $statuses = @()
     $allHealthy = $true
-    foreach ($svc in $services) {
+    foreach ($svc in $dataServices) {
         $status = docker inspect --format='{{.State.Health.Status}}' $svc.Container 2>$null
         if ([string]::IsNullOrWhiteSpace($status)) { $status = "(no-health)" }
         $statuses += ("{0}={1}" -f $svc.Name, $status)
@@ -120,12 +123,12 @@ while ((Get-Date) -lt $deadline) {
 }
 
 if (-not $allHealthy) {
-    Fail "No todos los servicios quedaron healthy a tiempo."
+    Fail "Los 3 nodos de datos no quedaron healthy a tiempo."
     Write-Host "Revisa el estado con: $ComposeExe $($ComposePrefix -join ' ') ps"
     Write-Host "Y los logs con: docker logs <container>"
     exit 1
 }
-Good "Los 4 servicios estan healthy"
+Good "Los 3 nodos de datos estan healthy"
 
 # 5. Estabilizar nodos antes de initiate
 Step "Esperando ${SettleSeconds}s adicionales para que los nodos estabilicen..."
@@ -173,6 +176,26 @@ foreach ($rs in $rsList) {
         exit 1
     }
 }
+
+# 8.5 Esperar a que el mongos quede healthy. Ahora ya puede hacer ping al
+#     config-rs (que tiene primary desde el paso anterior).
+Step "Esperando healthcheck del mongos (max $HealthWaitSeconds s)..."
+$mongosContainer = "taller-bd-mongos"
+$mongosHealthy = $false
+$mongosDeadline = (Get-Date).AddSeconds($HealthWaitSeconds)
+while ((Get-Date) -lt $mongosDeadline) {
+    $mongosStatus = docker inspect --format='{{.State.Health.Status}}' $mongosContainer 2>$null
+    if ([string]::IsNullOrWhiteSpace($mongosStatus)) { $mongosStatus = "(no-health)" }
+    Write-Host ("    [health] mongos=$mongosStatus")
+    if ($mongosStatus -eq "healthy") { $mongosHealthy = $true; break }
+    Start-Sleep -Seconds 3
+}
+if (-not $mongosHealthy) {
+    Fail "El mongos no quedo healthy a tiempo."
+    Write-Host "Revisa logs: docker logs $mongosContainer"
+    exit 1
+}
+Good "mongos healthy"
 
 # 9. Agregar los 2 shards al cluster via mongos
 Step "Agregando shards al cluster (via mongos)..."
