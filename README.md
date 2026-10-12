@@ -16,12 +16,12 @@ App funcional que demuestra **sharing horizontal** (filas repartidas entre shard
 
 - **Docker** (Docker Desktop o Docker Engine) con `docker compose` v2+
 - **Node.js 18+** (probado con Node 24, npm 11)
-- **PowerShell 5.1** (Windows) o bash (Mac/Linux)
+- **PowerShell 5.1** (Windows) o **bash** (Mac/Linux)
 - ~2 GB de RAM libres para los 4 contenedores MongoDB
 
 Verificación rápida:
 
-```powershell
+```bash
 docker --version
 docker compose version
 node --version
@@ -178,7 +178,7 @@ Ir a **Dashboard de shards** (`/shards`) y verificar:
 - Crear un `MX` → respuesta indica `shard02-rs`, `targeted`.
 
 **Verificación con mongosh:**
-```powershell
+```bash
 docker exec taller-bd-mongos mongosh --port 27017 --quiet --eval "sh.status()"
 docker exec taller-bd-mongos mongosh --port 27017 --quiet --eval "db.getSiblingDB('taller_perfiles').usuarios.getShardDistribution()"
 ```
@@ -194,7 +194,7 @@ Verificar:
 - El badge de shard de cada sección puede coincidir o no — eso depende del sharding key de cada colección.
 
 **Verificación con mongosh:**
-```powershell
+```bash
 # El perfil vive en un shard, los eventos en otro (o el mismo).
 docker exec taller-bd-mongos mongosh --port 27017 --quiet --eval "db.getSiblingDB('taller_perfiles').usuarios.findOne({_id:'usr-AR-001'})"
 docker exec taller-bd-mongos mongosh --port 27017 --quiet --eval "db.getSiblingDB('taller_actividad').eventos.find({user_id:'usr-AR-001'}).toArray()"
@@ -295,7 +295,7 @@ taller-bd-distribuida/
 
 ## Cleanup
 
-```powershell
+```bash
 # Apagar contenedores (conserva los datos)
 docker compose down
 
