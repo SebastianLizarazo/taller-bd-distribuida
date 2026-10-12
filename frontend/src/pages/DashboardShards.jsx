@@ -107,7 +107,7 @@ export default function DashboardShards() {
       </div>
 
       <div className="card" style={{ borderColor: 'var(--accent)' }}>
-        <h2>Resumen ejecutivo para el profesor</h2>
+        <h2>Resumen</h2>
         <ul>
           <li><strong>Sharing horizontal:</strong> cada colección shardeada reparte sus filas entre
             shard01-rs y shard02-rs según su sharding key. Verificable en los gráficos de arriba.</li>
