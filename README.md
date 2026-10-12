@@ -31,7 +31,16 @@ node --version
 
 ## Cómo probarlo (Windows + PowerShell)
 
-Desde la raíz del repo:
+Primero clona el repo y entra a su raíz:
+
+```powershell
+git clone https://github.com/SebastianLizarazo/taller-bd-distribuida.git
+cd taller-bd-distribuida
+```
+
+A partir de aquí necesitas **2 terminales PowerShell abiertas** en la raíz del repo. La primera se usa para el setup inicial y después se queda corriendo el backend; la segunda se queda corriendo el frontend. No las cierres mientras uses la app.
+
+### Terminal 1 — Setup del cluster y backend
 
 ```powershell
 # 1. Levantar los 4 contenedores del sharded cluster (config RS + 2 shards + mongos)
@@ -44,17 +53,17 @@ Start-Sleep -Seconds 10   # esperar healthchecks
 # 3. Cargar 60 usuarios y 600 eventos (opcional, la app funciona sin esto)
 .\setup\seed.ps1
 
-# 4. Backend
+# 4. Backend (esta terminal QUEDA CORRIENDO el proceso de Node — no la cierres)
 cd backend
 Copy-Item .env.example .env
 npm install
 npm start                # http://localhost:3001
 ```
 
-En otra terminal:
+### Terminal 2 — Frontend
 
 ```powershell
-# 5. Frontend
+# 5. Frontend (esta terminal QUEDA CORRIENDO el dev server de Vite — no la cierres)
 cd frontend
 Copy-Item .env.example .env
 npm install
@@ -69,80 +78,23 @@ Abrir **http://127.0.0.1:5173** en el navegador.
 
 ## Cómo probarlo (Linux + bash)
 
-Los scripts de setup del repo son PowerShell, pero el trabajo real lo hacen archivos `.js` ejecutados dentro del contenedor `mongos` con `mongosh` — así que en Linux tienes dos caminos. Elige el que prefieras.
+Los scripts de setup del repo son PowerShell, pero el trabajo real lo hacen archivos `.js` ejecutados dentro del contenedor `mongos` con `mongosh` — así que en Linux los invocamos directamente con `docker exec`, sin necesidad de instalar PowerShell.
 
-### Opción A — Instalar PowerShell multiplataforma (recomendada)
-
-`pwsh` (PowerShell 7+) corre nativo en Linux y permite ejecutar los `.ps1` del repo sin tocarlos. Instalación rápida con el gestor de paquetes de tu distro.
-
-**Debian / Ubuntu** ([instrucciones oficiales](https://learn.microsoft.com/powershell/scripting/install/install-debian)):
+Primero clona el repo y entra a su raíz:
 
 ```bash
-sudo apt update
-sudo apt install -y wget apt-transport-https software-properties-common
-wget -q https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb
-sudo dpkg -i packages-microsoft-prod.deb
-sudo apt update
-sudo apt install -y powershell
-pwsh --version
+git clone https://github.com/SebastianLizarazo/taller-bd-distribuida.git
+cd taller-bd-distribuida
 ```
 
-**Fedora / RHEL**:
+A partir de aquí necesitas **2 terminales bash abiertas** en la raíz del repo. La primera se usa para el setup inicial y después se queda corriendo el backend; la segunda se queda corriendo el frontend. No las cierres mientras uses la app.
 
-```bash
-sudo dnf install -y powershell
-pwsh --version
-```
-
-**Arch / Manjaro**:
-
-```bash
-sudo pacman -S --noconfirm powershell
-pwsh --version
-```
-
-Una vez instalado `pwsh`, desde la raíz del repo todo es igual que en Windows pero invocando `pwsh` en lugar del binario nativo de PowerShell:
+### Terminal 1 — Setup del cluster y backend
 
 ```bash
 # 1. Levantar los 4 contenedores del sharded cluster (config RS + 2 shards + mongos)
 docker compose up -d
-sleep 15   # cushion para healthchecks; el script tiene su propio loop de espera
-
-# 2. Inicializar replica sets + agregar shards al cluster
-pwsh setup/setup-cluster.ps1
-
-# 3. Cargar 60 usuarios y 600 eventos (opcional, la app funciona sin esto)
-pwsh setup/seed.ps1
-
-# 4. Backend
-cd backend
-cp .env.example .env
-npm install
-npm start                # http://localhost:3001
-```
-
-En otra terminal:
-
-```bash
-# 5. Frontend
-cd frontend
-cp .env.example .env
-npm install
-npm run dev              # http://127.0.0.1:5173
-```
-
-Abrir **http://127.0.0.1:5173** en el navegador.
-
-> **Diferencias con Windows:** `.\setup\setup-cluster.ps1` → `pwsh setup/setup-cluster.ps1`, `Copy-Item .env.example .env` → `cp .env.example .env`, `Start-Sleep -Seconds N` → `sleep N`. Todo lo demás es idéntico porque el `.ps1` se encarga del resto.
-
-### Opción B — Bash puro (sin instalar nada extra)
-
-Los `.ps1` solo orquestan `docker compose` + `docker exec ... mongosh < script.js`. Si prefieres no instalar `pwsh`, puedes correr todo desde bash invocando cada `.js` directamente:
-
-```bash
-# 1. Levantar los 4 contenedores del sharded cluster
-docker compose up -d
-sleep 15
+sleep 15   # cushion para healthchecks
 
 # 2. Inicializar los 3 replica sets (config-rs + shard01-rs + shard02-rs)
 docker exec -i taller-bd-config01 mongosh --port 27017 --quiet < setup/01-init-replicasets.js
@@ -162,24 +114,26 @@ docker exec -i taller-bd-mongos mongosh --port 27017 --quiet < setup/04-insert-d
 # 7. (Opcional) Seed masivo: 60 usuarios + 600 eventos
 docker exec -i taller-bd-mongos mongosh --port 27017 --quiet < setup/05-seed.js
 
-# 8. Backend
+# 8. Backend (esta terminal QUEDA CORRIENDO el proceso de Node — no la cierres)
 cd backend
 cp .env.example .env
 npm install
 npm start                # http://localhost:3001
 ```
 
-En otra terminal:
+### Terminal 2 — Frontend
 
 ```bash
-# 9. Frontend
+# 9. Frontend (esta terminal QUEDA CORRIENDO el dev server de Vite — no la cierres)
 cd frontend
 cp .env.example .env
 npm install
 npm run dev              # http://127.0.0.1:5173
 ```
 
-> **Diferencia clave con la Opción A:** aquí no hay loop de healthchecks ni espera activa del primary — son `sleep` fijos. Si tu máquina es lenta y un paso falla, incrementa el `sleep` del paso 3 (a 60–90s) y reintenta; los `.js` son **idempotentes** y se pueden re-correr sin romper el cluster.
+Abrir **http://127.0.0.1:5173** en el navegador.
+
+> **Nota:** los pasos 2–7 (los `.js`) son **idempotentes** y se pueden re-correr sin romper el cluster. Si tu máquina es lenta y un paso falla, incrementa el `sleep` del paso 3 (a 60–90s) y reintenta.
 
 ---
 
