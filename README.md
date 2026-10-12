@@ -67,6 +67,122 @@ Abrir **http://127.0.0.1:5173** en el navegador.
 
 ---
 
+## Cómo probarlo (Linux + bash)
+
+Los scripts de setup del repo son PowerShell, pero el trabajo real lo hacen archivos `.js` ejecutados dentro del contenedor `mongos` con `mongosh` — así que en Linux tienes dos caminos. Elige el que prefieras.
+
+### Opción A — Instalar PowerShell multiplataforma (recomendada)
+
+`pwsh` (PowerShell 7+) corre nativo en Linux y permite ejecutar los `.ps1` del repo sin tocarlos. Instalación rápida con el gestor de paquetes de tu distro.
+
+**Debian / Ubuntu** ([instrucciones oficiales](https://learn.microsoft.com/powershell/scripting/install/install-debian)):
+
+```bash
+sudo apt update
+sudo apt install -y wget apt-transport-https software-properties-common
+wget -q https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb
+sudo dpkg -i packages-microsoft-prod.deb
+sudo apt update
+sudo apt install -y powershell
+pwsh --version
+```
+
+**Fedora / RHEL**:
+
+```bash
+sudo dnf install -y powershell
+pwsh --version
+```
+
+**Arch / Manjaro**:
+
+```bash
+sudo pacman -S --noconfirm powershell
+pwsh --version
+```
+
+Una vez instalado `pwsh`, desde la raíz del repo todo es igual que en Windows pero invocando `pwsh` en lugar del binario nativo de PowerShell:
+
+```bash
+# 1. Levantar los 4 contenedores del sharded cluster (config RS + 2 shards + mongos)
+docker compose up -d
+sleep 15   # cushion para healthchecks; el script tiene su propio loop de espera
+
+# 2. Inicializar replica sets + agregar shards al cluster
+pwsh setup/setup-cluster.ps1
+
+# 3. Cargar 60 usuarios y 600 eventos (opcional, la app funciona sin esto)
+pwsh setup/seed.ps1
+
+# 4. Backend
+cd backend
+cp .env.example .env
+npm install
+npm start                # http://localhost:3001
+```
+
+En otra terminal:
+
+```bash
+# 5. Frontend
+cd frontend
+cp .env.example .env
+npm install
+npm run dev              # http://127.0.0.1:5173
+```
+
+Abrir **http://127.0.0.1:5173** en el navegador.
+
+> **Diferencias con Windows:** `.\setup\setup-cluster.ps1` → `pwsh setup/setup-cluster.ps1`, `Copy-Item .env.example .env` → `cp .env.example .env`, `Start-Sleep -Seconds N` → `sleep N`. Todo lo demás es idéntico porque el `.ps1` se encarga del resto.
+
+### Opción B — Bash puro (sin instalar nada extra)
+
+Los `.ps1` solo orquestan `docker compose` + `docker exec ... mongosh < script.js`. Si prefieres no instalar `pwsh`, puedes correr todo desde bash invocando cada `.js` directamente:
+
+```bash
+# 1. Levantar los 4 contenedores del sharded cluster
+docker compose up -d
+sleep 15
+
+# 2. Inicializar los 3 replica sets (config-rs + shard01-rs + shard02-rs)
+docker exec -i taller-bd-config01 mongosh --port 27017 --quiet < setup/01-init-replicasets.js
+
+# 3. Esperar a que los 3 RS tengan primary (la primera eleccion tarda ~30s)
+sleep 30
+
+# 4. Agregar los 2 shards al cluster via mongos
+docker exec -i taller-bd-mongos mongosh --port 27017 --quiet < setup/02-add-shards.js
+
+# 5. Habilitar sharding en taller_perfiles y taller_actividad
+docker exec -i taller-bd-mongos mongosh --port 27017 --quiet < setup/03-enable-sharding.js
+
+# 6. Insertar seed minimo + forzar split/move entre shards
+docker exec -i taller-bd-mongos mongosh --port 27017 --quiet < setup/04-insert-distribution.js
+
+# 7. (Opcional) Seed masivo: 60 usuarios + 600 eventos
+docker exec -i taller-bd-mongos mongosh --port 27017 --quiet < setup/05-seed.js
+
+# 8. Backend
+cd backend
+cp .env.example .env
+npm install
+npm start                # http://localhost:3001
+```
+
+En otra terminal:
+
+```bash
+# 9. Frontend
+cd frontend
+cp .env.example .env
+npm install
+npm run dev              # http://127.0.0.1:5173
+```
+
+> **Diferencia clave con la Opción A:** aquí no hay loop de healthchecks ni espera activa del primary — son `sleep` fijos. Si tu máquina es lenta y un paso falla, incrementa el `sleep` del paso 3 (a 60–90s) y reintenta; los `.js` son **idempotentes** y se pueden re-correr sin romper el cluster.
+
+---
+
 ## Arquitectura
 
 ```
@@ -217,7 +333,7 @@ taller-bd-distribuida/
 | `docker compose ps` muestra `unhealthy` | Healthcheck del mongos depende del config-rs | Esperar 60s. Re-correr `.\setup\setup-cluster.ps1`. |
 | `mongosh --host localhost:27017` rechaza conexiones | El mongos quedó zombie | `docker compose restart mongos` |
 | Backend arranca pero `/health` da 503 | Conexión al mongos falló | Verificar `MONGOS_URI` en `backend/.env`. Verificar que `docker compose ps` muestre mongos healthy. |
-| `npm run dev` falla con `EADDRINUSE` | Otra instancia de Vite corriendo | Matar con `Get-Process node | Stop-Process` |
+| `npm run dev` falla con `EADDRINUSE` | Otra instancia de Vite corriendo | Matar con `Get-Process node \| Stop-Process` (Windows) o `pkill -f "vite"` (Linux/Mac) |
 | Vite tira `Expected ":" but found "}"` en JSX | Bug de escape de `{` en template literal | Re-guardar el archivo afectado (ver src/pages/PerfilCompleto.jsx línea 96). |
 | El cluster no se inicializa tras `docker compose down -v` | Volúmenes borrados, replica sets perdidos | Re-correr `.\setup\setup-cluster.ps1` (es idempotente). |
 
